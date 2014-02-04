@@ -26,6 +26,7 @@
 
 uint8_t dataPin = 2; // Yellow
 uint8_t clockPin = 3; // Green
+uint8_t statusPin = 13;
 uint8_t mode = 0;
 uint32_t startTime = 0;
 byte byte1, byte2, byte3;
@@ -47,7 +48,7 @@ Adafruit_WS2801 strip = Adafruit_WS2801(numPixels, dataPin, clockPin);
 void setup() {
   strip.begin();
   strip.show();
-
+  pinMode(statusPin, OUTPUT);
   Serial.begin(9600);
 }
 
@@ -72,7 +73,6 @@ void loop() {
 }
 
 void loop_startup() {
-
   if (i == 0) {
     strip.setPixelColor(numPixels-1, 0);
   } 
@@ -91,15 +91,15 @@ void loop_startup() {
 
   if (Serial.available() >= 2) {
     byte1 = Serial.read();
-    if (byte1 == 'x') {
+    if ((char)byte1 == 'x') {
       byte2 = Serial.read();
       if (byte2 == 'o') {
-        Serial.read(); // Ignore the new line
         Serial.print("OKv");
         Serial.println(VERSION);
         Serial.print("D");
         Serial.println(numPixels);
         Serial.flush();
+        Serial.read(); // Ignore the new line
         mode = MODE_LOAD;
         return;
       }
@@ -132,7 +132,7 @@ void loop_load() {
 
   clearStrip();
 
-  // EEPROM.write(0, width); 
+  EEPROM.write(0, width); 
 
   for(i=0;i<width;i++) {
     strip.setPixelColor(i, Color(0, 36, 0)); strip.show();
@@ -155,14 +155,19 @@ void loop_load() {
 void loop_error() {
   if (Serial.available() >= 2) {
     byte1 = Serial.read();
+    Serial.println((char)byte1);
+    Serial.flush();
     if (byte1 == 'R' || byte1 == 'x') {
       byte2 = Serial.read();
+      Serial.println((char)byte2);
+      Serial.flush();
       if (byte1 == 'R' && byte2 == 'T') {
         startTime = millis();
         clearStrip();
         mode = MODE_STARTUP;
         i=0;
-        Serial.println("RESET");
+        Serial.println("RST");
+        Serial.flush();
         return;
       }
       if (byte1 == 'x' && byte2 == 'o') {
@@ -182,8 +187,12 @@ void loop_error() {
   }
   strip.show();
   delay(100);
-  if (j == 1) j = 0; 
-  else j = 1;
+  if (j == 1) { j = 0; 
+  digitalWrite(statusPin, HIGH);
+  }
+  else { j = 1;
+  digitalWrite(statusPin, LOW);
+  }
 }
 
 void load_run() {
@@ -201,6 +210,16 @@ void load_run() {
   strip.show();
   i = (i+1)%width;
   delay(100);
+}
+
+void step(uint8_t count) {
+  for(; count>0; count--) {
+    digitalWrite(statusPin, HIGH);
+    delay(250);
+    digitalWrite(statusPin, LOW);
+    delay(250);
+  }
+  delay(750);
 }
 
 uint32_t Color(byte r, byte g, byte b)
